@@ -332,7 +332,10 @@
         minWidth: 300,
         maxWidth: 500,
       })
-        .setLatLng(CENTER)
+        .setLatLng([
+          (map.getBounds().getSouthWest().lat + CENTER[0]) / 2,
+          CENTER[1],
+        ])
         .setContent(welcomeTemplate.cloneNode(true))
         .openOn(map);
     </script>
