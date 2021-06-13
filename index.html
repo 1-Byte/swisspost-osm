@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Swiss Post Letter Boxes</title>
+    <link rel="icon" href="favicon.png" />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
+      integrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A=="
+      crossorigin=""
+    />
+    <script
+      src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"
+      integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA=="
+      crossorigin=""
+    ></script>
+    <style>
+      html,
+      body {
+        padding: 0;
+        margin: 0;
+        height: 100%;
+      }
+      #map {
+        height: 100%;
+        width: 100%;
+      }
+      .popup-title {
+        font-size: inherit;
+        font-weight: bold;
+        text-align: center;
+      }
+      .popup-status {
+        text-align: center;
+      }
+      .popup-status span {
+        font-family: monospace;
+        user-select: all;
+        white-space: nowrap;
+      }
+      .popup-osm {
+        border-collapse: collapse;
+      }
+      .popup-osm th,
+      .popup-osm td {
+        font-family: monospace;
+        font-size: 90%;
+        font-weight: normal;
+        padding: 1ch 1ch 0 0;
+        vertical-align: top;
+      }
+      .popup-welcome {
+        text-align: center;
+        width: 400px;
+      }
+      .popup-welcome h2 {
+        font-size: 1.2em;
+      }
+      .popup-version {
+        font-size: 70%;
+        font-family: monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+    <template id="popup">
+      <div>
+        <h2 class="popup-title"></h2>
+        <p class="popup-status">…</p>
+        <table class="popup-osm"></table>
+      </div>
+    </template>
+    <template id="popup-welcome">
+      <div class="popup-welcome">
+        <h1><img src="logo.png" alt="Logo" /><br />Swiss Post Letter Boxes</h1>
+        <h2>Usage</h2>
+        <p>Zoom in on your desired region and click the refresh button!</p>
+        <h2>Code/Bug Reports</h2>
+        <p>
+          <a href="https://github.com/1-Byte/swisspost-osm"
+            >https://github.com/1-Byte/swisspost-osm</a
+          >
+        </p>
+        <p class="popup-version"></p>
+      </div>
+    </template>
+    <script>
+      const SWISSPOST_KEY = "";
+      const OVERPASS_URL = "https://overpass.osm.ch/api/interpreter";
+      const BUFFER = 30;
+      const CENTER = [47.0, 8.3];
+
+      let iconOptions = {
+        ...L.Icon.Default.prototype.options,
+        iconRetinaUrl: null,
+        shadowUrl: "marker-shadow.png",
+        shadowRetinaUrl: null,
+      };
+      let postIcon = L.icon({ ...iconOptions, iconUrl: "marker-post.png" });
+      let osmIcon = L.icon({ ...iconOptions, iconUrl: "marker-osm.png" });
+      let osmPostIcon = L.icon({
+        ...iconOptions,
+        iconUrl: "marker-osmpost.png",
+      });
+      let popupTemplate = document.getElementById("popup").content;
+      let welcomeTemplate = document.getElementById("popup-welcome").content;
+      let map = L.map("map").setView(CENTER, 9);
+
+      const Button = L.Control.extend({
+        initialize: function (label, handler, options) {
+          this.label = label;
+          this.handler = handler;
+          L.setOptions(this, options);
+        },
+        onAdd: function (map) {
+          var div = L.DomUtil.create("div");
+          div.classList.add("leaflet-control");
+          div.classList.add("leaflet-bar");
+          var a = L.DomUtil.create("a");
+          a.role = "button";
+          a.title = this.label;
+          a.style.fontSize = "22px";
+          a.style.cursor = "pointer";
+          a.textContent = this.label;
+          a.onclick = () => {
+            this.handler(map);
+            return false;
+          };
+          div.appendChild(a);
+          return div;
+        },
+        onRemove: function (map) {},
+      });
+
+      async function queryOsm(map) {
+        let bbox = map.getBounds().toBBoxString();
+        let url = `${OVERPASS_URL}?data=[bbox][out:json];node[amenity=post_box];out;&bbox=${bbox}`;
+        let res = await fetch(url);
+        let json = await res.json();
+        let result = {};
+        for (let node of json.elements) {
+          result[node.id] = node;
+        }
+        return result;
+      }
+
+      async function queryPost(map) {
+        let center = map.getCenter();
+        let bounds = map.getBounds();
+        let distance = ~~bounds
+          .getSouthWest()
+          .distanceTo(bounds.getNorthEast());
+        let geofilter = [center.lat, center.lng, distance].join(",");
+        let res = await fetch(
+          `https://swisspost.opendatasoft.com/api/records/1.0/search/?dataset=zugangspunkte-post&q=&rows=50&facet=address_kantoncode&facet=address_zip&refine.poityp_de=Briefeinwurf&geofilter.distance=${geofilter}`,
+          {
+            headers: {
+              authorization: "Apikey " + SWISSPOST_KEY,
+            },
+          }
+        );
+        let json = await res.json();
+        let result = {};
+        for (let record of json.records) {
+          result[record.fields.id] = {
+            title: record.fields.description_en.replace(/^Letterbox /, ""),
+            geopoint: record.fields.geopoint,
+          };
+        }
+        return result;
+      }
+
+      function parsePartial(html) {
+        let doc = document.createElement("template");
+        doc.innerHTML = html;
+        let details = doc.content.querySelector(".button_to-details");
+        if (!details) return null;
+        for (let container of doc.content.querySelectorAll(".info-container")) {
+          if (container.querySelector("h6").textContent != "Leerungszeiten")
+            continue;
+          let data = {};
+          for (let dt of container.querySelectorAll("dt")) {
+            data[dt.textContent] = dt.nextElementSibling.textContent;
+          }
+          return { url: details.href, data };
+        }
+        return null;
+      }
+
+      function mapPartial(data) {
+        const MAPPINGS = {
+          "Montag – Freitag": "Mo-Fr",
+          Samstag: "Sa",
+          Sonntag: "Su",
+        };
+        let result = [];
+        for (let key in data) {
+          if (key in MAPPINGS && /^[0-9]{1,2}\.[0-9]{2}$/.test(data[key])) {
+            let value = data[key].replace(".", ":");
+            result.push(`${MAPPINGS[key]} ${value}`);
+          } else {
+            return null;
+          }
+        }
+        return result.join("; ");
+      }
+
+      function merge(post, osm) {
+        let matches = {};
+        for (let id in post) {
+          let buffer = L.latLng(post[id].geopoint).toBounds(BUFFER);
+          matches[id] = [];
+          for (let node in osm) {
+            if (buffer.contains([osm[node].lat, osm[node].lon])) {
+              if (!("post" in osm[node])) osm[node].post = [];
+              osm[node].post.push(id);
+              matches[id].push(node);
+            }
+          }
+        }
+        for (let id in matches) {
+          let osmId =
+            matches[id].length == 1 && osm[matches[id][0]].post.length == 1
+              ? matches[id][0]
+              : null;
+          let osmTags = osmId ? osm[osmId].tags : null;
+          if (osmId) delete osm[osmId];
+          L.marker(post[id].geopoint, {
+            title: post[id].title,
+            icon: osmTags ? osmPostIcon : postIcon,
+            poiId: id,
+            osmTags,
+          }).addTo(postMarkers);
+        }
+        for (let node in osm) {
+          L.marker([osm[node].lat, osm[node].lon], {
+            icon: osmIcon,
+            title: "#" + node,
+          }).addTo(osmMarkers);
+        }
+      }
+
+      L.tileLayer("https://tile.osm.ch/switzerland/{z}/{x}/{y}.png", {
+        attribution:
+          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, <a href="https://swisspost.opendatasoft.com/">SwissPost</a>',
+        maxZoom: 18,
+      }).addTo(map);
+
+      let osmMarkers = L.featureGroup([]).addTo(map);
+
+      let postMarkers = L.featureGroup([])
+        .bindPopup(
+          ({ options }) => {
+            let popup = popupTemplate.firstElementChild.cloneNode(true);
+            popup.querySelector(".popup-title").textContent = options.title;
+            if (options.osmTags) {
+              let table = popup.querySelector(".popup-osm");
+              for (let key in options.osmTags) {
+                let tr = document.createElement("tr");
+                let keyCell = document.createElement("th");
+                keyCell.textContent = key;
+                let valueCell = document.createElement("td");
+                valueCell.textContent = options.osmTags[key];
+                tr.appendChild(keyCell);
+                tr.appendChild(valueCell);
+                table.appendChild(tr);
+              }
+            }
+            options.status = popup.querySelector(".popup-status");
+            return popup;
+          },
+          {
+            minWidth: 200,
+            maxWidth: 400,
+          }
+        )
+        .on("popupopen", function (e) {
+          let { poiId, osmTags, status } = e.sourceTarget.options;
+          let url = `https://places.post.ch/Public/PoiDetail/ShortDetailPagePartial?poiId=${poiId}&lang=de`;
+          fetch(url)
+            .then((res) => {
+              return res.text();
+            })
+            .then((html) => {
+              let parsed = parsePartial(html);
+              if (!parsed) {
+                status.textContent = "?";
+                return;
+              }
+              let mapped = mapPartial(parsed.data);
+              if (mapped) {
+                let span = document.createElement("span");
+                span.textContent = mapped;
+                if (osmTags && osmTags.collection_times == mapped) {
+                  span.style.color = "green";
+                } else if (osmTags) {
+                  span.style.color = "red";
+                }
+                status.replaceChild(span, status.childNodes[0]);
+              } else {
+                let a = document.createElement("a");
+                a.target = "_blank";
+                a.href = parsed.url;
+                a.textContent = "Manual Verification";
+                status.replaceChild(a, status.childNodes[0]);
+              }
+            });
+        })
+        .addTo(map);
+
+      async function refresh(map) {
+        postMarkers.clearLayers();
+        osmMarkers.clearLayers();
+        let post = await queryPost(map);
+        let osm = await queryOsm(map);
+        merge(post, osm);
+      }
+      new Button("↻", refresh, { position: "topleft" }).addTo(map);
+
+      L.popup({
+        minWidth: 300,
+        maxWidth: 500,
+      })
+        .setLatLng(CENTER)
+        .setContent(welcomeTemplate.cloneNode(true))
+        .openOn(map);
+    </script>
+  </body>
+</html>
