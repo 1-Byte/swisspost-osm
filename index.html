@@ -26,6 +26,11 @@
         height: 100%;
         width: 100%;
       }
+      p.warning {
+        background-color: #ffeeba;
+        border-radius: 5px;
+        padding: 0.5em;
+      }
       .popup-title {
         font-size: inherit;
         font-weight: bold;
@@ -76,14 +81,18 @@
       <div class="popup-welcome">
         <h1><img src="logo.png" alt="Logo" /><br />Swiss Post Letter Boxes</h1>
         <h2>Usage</h2>
-        <p>Zoom in on your desired region and click the refresh button!</p>
+        <p>Zoom in on your desired region and click the refresh button.</p>
+        <p class="warning">
+          Please use this tool only to plan your survey tours and do not copy
+          data directly!
+        </p>
         <h2>Code/Bug Reports</h2>
         <p>
           <a href="https://github.com/1-Byte/swisspost-osm"
             >https://github.com/1-Byte/swisspost-osm</a
           >
         </p>
-        <p class="popup-version">7f6ea0a5c94f605da523b0a77e45fb6ef0959ce6</p>
+        <p class="popup-version">3bc0e3aa6880836991d010d5c53d8caae8cdb770</p>
       </div>
     </template>
     <script>
@@ -323,7 +332,10 @@
         minWidth: 300,
         maxWidth: 500,
       })
-        .setLatLng(CENTER)
+        .setLatLng([
+          (map.getBounds().getSouthWest().lat + CENTER[0]) / 2,
+          CENTER[1],
+        ])
         .setContent(welcomeTemplate.cloneNode(true))
         .openOn(map);
     </script>
