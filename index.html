@@ -48,6 +48,10 @@
         user-select: all;
         white-space: nowrap;
       }
+      .popup-osm-id a {
+        color: inherit;
+        text-decoration: inherit;
+      }
       .popup-osm-tags {
         border-collapse: collapse;
       }
@@ -275,7 +279,11 @@
             let osmId = popup.querySelector(".popup-osm-id");
             let osmTags = popup.querySelector(".popup-osm-tags");
             if (options.osmId) {
-              osmId.textContent = "#" + options.osmId;
+              let a = document.createElement("a");
+              a.target = "_blank";
+              a.href = "https://www.openstreetmap.org/node/" + options.osmId;
+              a.textContent = "#" + options.osmId;
+              osmId.appendChild(a);
               for (let key in options.osmTags) {
                 let tr = document.createElement("tr");
                 let keyCell = document.createElement("th");
