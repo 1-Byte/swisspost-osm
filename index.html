@@ -26,12 +26,16 @@
         height: 100%;
         width: 100%;
       }
+      #map .leaflet-popup-content p {
+        margin: 12px 0;
+      }
       p.warning {
         background-color: #ffeeba;
         border-radius: 5px;
         padding: 0.5em;
       }
-      .popup-title {
+      .popup-post,
+      .popup-osm-id {
         font-size: inherit;
         font-weight: bold;
         text-align: center;
@@ -44,15 +48,15 @@
         user-select: all;
         white-space: nowrap;
       }
-      .popup-osm {
+      .popup-osm-tags {
         border-collapse: collapse;
       }
-      .popup-osm th,
-      .popup-osm td {
+      .popup-osm-tags th,
+      .popup-osm-tags td {
         font-family: monospace;
         font-size: 90%;
         font-weight: normal;
-        padding: 1ch 1ch 0 0;
+        padding: 0 1ch 0 0;
         vertical-align: top;
       }
       .popup-welcome {
@@ -72,9 +76,10 @@
     <div id="map"></div>
     <template id="popup">
       <div>
-        <h2 class="popup-title"></h2>
+        <h2 class="popup-post"></h2>
         <p class="popup-status">…</p>
-        <table class="popup-osm"></table>
+        <h3 class="popup-osm-id"></h3>
+        <table class="popup-osm-tags"></table>
       </div>
     </template>
     <template id="popup-welcome">
@@ -92,7 +97,7 @@
             >https://github.com/1-Byte/swisspost-osm</a
           >
         </p>
-        <p class="popup-version">3bc0e3aa6880836991d010d5c53d8caae8cdb770</p>
+        <p class="popup-version">f60846daa3fcdc38d078841274d9d3cb13e9fb17</p>
       </div>
     </template>
     <script>
@@ -201,8 +206,9 @@
       function mapPartial(data) {
         const MAPPINGS = {
           "Montag – Freitag": "Mo-Fr",
+          "Montag – Samstag": "Mo-Sa",
           Samstag: "Sa",
-          Sonntag: "Su",
+          Sonntag: "Su,PH",
         };
         let result = [];
         for (let key in data) {
@@ -237,16 +243,18 @@
           let osmTags = osmId ? osm[osmId].tags : null;
           if (osmId) delete osm[osmId];
           L.marker(post[id].geopoint, {
-            title: post[id].title,
-            icon: osmTags ? osmPostIcon : postIcon,
+            title: `${post[id].title} ↔ ${osmId ? "#" + osmId : "-"}`,
+            icon: osmId ? osmPostIcon : postIcon,
             poiId: id,
+            poiTitle: post[id].title,
+            osmId,
             osmTags,
           }).addTo(postMarkers);
         }
         for (let node in osm) {
           L.marker([osm[node].lat, osm[node].lon], {
             icon: osmIcon,
-            title: "#" + node,
+            title: `- ↔ #${node}`,
           }).addTo(osmMarkers);
         }
       }
@@ -263,9 +271,11 @@
         .bindPopup(
           ({ options }) => {
             let popup = popupTemplate.firstElementChild.cloneNode(true);
-            popup.querySelector(".popup-title").textContent = options.title;
-            if (options.osmTags) {
-              let table = popup.querySelector(".popup-osm");
+            popup.querySelector(".popup-post").textContent = options.poiTitle;
+            let osmId = popup.querySelector(".popup-osm-id");
+            let osmTags = popup.querySelector(".popup-osm-tags");
+            if (options.osmId) {
+              osmId.textContent = "#" + options.osmId;
               for (let key in options.osmTags) {
                 let tr = document.createElement("tr");
                 let keyCell = document.createElement("th");
@@ -274,8 +284,11 @@
                 valueCell.textContent = options.osmTags[key];
                 tr.appendChild(keyCell);
                 tr.appendChild(valueCell);
-                table.appendChild(tr);
+                osmTags.appendChild(tr);
               }
+            } else {
+              osmId.parentNode.removeChild(osmId);
+              osmTags.parentNode.removeChild(osmTags);
             }
             options.status = popup.querySelector(".popup-status");
             return popup;
