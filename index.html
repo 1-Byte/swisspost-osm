@@ -70,6 +70,20 @@
       .popup-welcome h2 {
         font-size: 1.2em;
       }
+      .popup-legend {
+        display: flex;
+        list-style-type: none;
+        padding: 0;
+        gap: 1ch;
+        align-items: center;
+      }
+      .popup-legend li {
+        display: contents;
+      }
+      .popup-legend span {
+        flex: 1;
+        text-align: left;
+      }
       .popup-version {
         font-size: 70%;
         font-family: monospace;
@@ -95,13 +109,20 @@
           Please use this tool only to plan your survey tours and do not copy
           data directly!
         </p>
+        <ul class="popup-legend">
+          <li><img src="./marker-post.png" /><span>Swiss Post</span></li>
+          <li>
+            <img src="./marker-osmpost.png" /><span>Swiss Post & OSM</span>
+          </li>
+          <li><img src="./marker-osm.png" /><span>OSM</span></li>
+        </ul>
         <h2>Code/Bug Reports</h2>
         <p>
           <a href="https://github.com/1-Byte/swisspost-osm"
             >https://github.com/1-Byte/swisspost-osm</a
           >
         </p>
-        <p class="popup-version">8c159b61b70374e0d28031cd2b215dbf27c4d58b</p>
+        <p class="popup-version">2560a9f386e7a3c20f3a44e1b3e86a50129bc293</p>
       </div>
     </template>
     <script>
