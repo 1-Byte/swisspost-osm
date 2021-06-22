@@ -34,7 +34,7 @@
         border-radius: 5px;
         padding: 0.5em;
       }
-      .popup-post,
+      .popup-poi-title,
       .popup-osm-id {
         font-size: inherit;
         font-weight: bold;
@@ -94,7 +94,7 @@
     <div id="map"></div>
     <template id="popup">
       <div>
-        <h2 class="popup-post"></h2>
+        <h2 class="popup-poi-title"></h2>
         <p class="popup-status">…</p>
         <h3 class="popup-osm-id"></h3>
         <table class="popup-osm-tags"></table>
@@ -122,7 +122,7 @@
             >https://github.com/1-Byte/swisspost-osm</a
           >
         </p>
-        <p class="popup-version">2560a9f386e7a3c20f3a44e1b3e86a50129bc293</p>
+        <p class="popup-version">2ace3a9b2ad9ddbf52b74db6b85ff49b64f96e9f</p>
       </div>
     </template>
     <script>
@@ -143,6 +143,7 @@
         ...iconOptions,
         iconUrl: "marker-osmpost.png",
       });
+      let popupOptions = { minWidth: 200, maxWidth: 400 };
       let popupTemplate = document.getElementById("popup").content;
       let welcomeTemplate = document.getElementById("popup-welcome").content;
       let map = L.map("map").setView(CENTER, 9);
@@ -278,10 +279,47 @@
         }
         for (let node in osm) {
           L.marker([osm[node].lat, osm[node].lon], {
-            icon: osmIcon,
             title: `- ↔ #${node}`,
+            icon: osmIcon,
+            osmId: node,
+            osmTags: osm[node].tags,
           }).addTo(osmMarkers);
         }
+      }
+
+      function bindPopup({ options }) {
+        let popup = popupTemplate.firstElementChild.cloneNode(true);
+        let poiTitle = popup.querySelector(".popup-poi-title");
+        options.status = popup.querySelector(".popup-status");
+        if (options.poiId) {
+          poiTitle.textContent = options.poiTitle;
+        } else {
+          poiTitle.parentNode.removeChild(poiTitle);
+          options.status.parentNode.removeChild(options.status);
+        }
+        let osmId = popup.querySelector(".popup-osm-id");
+        let osmTags = popup.querySelector(".popup-osm-tags");
+        if (options.osmId) {
+          let a = document.createElement("a");
+          a.target = "_blank";
+          a.href = "https://www.openstreetmap.org/node/" + options.osmId;
+          a.textContent = "#" + options.osmId;
+          osmId.appendChild(a);
+          for (let key in options.osmTags) {
+            let tr = document.createElement("tr");
+            let keyCell = document.createElement("th");
+            keyCell.textContent = key;
+            let valueCell = document.createElement("td");
+            valueCell.textContent = options.osmTags[key];
+            tr.appendChild(keyCell);
+            tr.appendChild(valueCell);
+            osmTags.appendChild(tr);
+          }
+        } else {
+          osmId.parentNode.removeChild(osmId);
+          osmTags.parentNode.removeChild(osmTags);
+        }
+        return popup;
       }
 
       L.tileLayer("https://tile.osm.ch/switzerland/{z}/{x}/{y}.png", {
@@ -290,43 +328,12 @@
         maxZoom: 18,
       }).addTo(map);
 
-      let osmMarkers = L.featureGroup([]).addTo(map);
+      let osmMarkers = L.featureGroup([])
+        .bindPopup(bindPopup, popupOptions)
+        .addTo(map);
 
       let postMarkers = L.featureGroup([])
-        .bindPopup(
-          ({ options }) => {
-            let popup = popupTemplate.firstElementChild.cloneNode(true);
-            popup.querySelector(".popup-post").textContent = options.poiTitle;
-            let osmId = popup.querySelector(".popup-osm-id");
-            let osmTags = popup.querySelector(".popup-osm-tags");
-            if (options.osmId) {
-              let a = document.createElement("a");
-              a.target = "_blank";
-              a.href = "https://www.openstreetmap.org/node/" + options.osmId;
-              a.textContent = "#" + options.osmId;
-              osmId.appendChild(a);
-              for (let key in options.osmTags) {
-                let tr = document.createElement("tr");
-                let keyCell = document.createElement("th");
-                keyCell.textContent = key;
-                let valueCell = document.createElement("td");
-                valueCell.textContent = options.osmTags[key];
-                tr.appendChild(keyCell);
-                tr.appendChild(valueCell);
-                osmTags.appendChild(tr);
-              }
-            } else {
-              osmId.parentNode.removeChild(osmId);
-              osmTags.parentNode.removeChild(osmTags);
-            }
-            options.status = popup.querySelector(".popup-status");
-            return popup;
-          },
-          {
-            minWidth: 200,
-            maxWidth: 400,
-          }
-        )
+        .bindPopup(bindPopup, popupOptions)
         .on("popupopen", function (e) {
           let { poiId, osmTags, status } = e.sourceTarget.options;
           let url = `https://places.post.ch/Public/PoiDetail/ShortDetailPagePartial?poiId=${poiId}&lang=de`;
